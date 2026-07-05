@@ -9,39 +9,19 @@ export default function App() {
   const [selectedShow, setSelectedShow] = useState(null);
   const [files, setFiles] = useState([]);
   const [activeFile, setActiveFile] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadShows();
   }, []);
 
   async function loadShows() {
-    setLoading(true);
-    setError(null);
     try {
-      console.log("Fetching shows from API...");
       const res = await fetch(`${API}?action=getPrestations`);
-      console.log("Response status:", res.status);
       const json = await res.json();
-      console.log("API response:", json);
-      
-      if (Array.isArray(json)) {
-        setShows(json);
-        console.log("Shows loaded:", json.length);
-      } else if (json.data && Array.isArray(json.data)) {
-        setShows(json.data);
-        console.log("Shows loaded from json.data:", json.data.length);
-      } else {
-        console.log("Unexpected response format:", typeof json);
-        setShows([]);
-      }
+      setShows(Array.isArray(json) ? json : []);
     } catch (e) {
-      console.error("Error loading shows:", e);
-      setError(e.message);
+      console.error(e);
       setShows([]);
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -50,20 +30,11 @@ export default function App() {
     setActiveFile(null);
 
     try {
-      console.log("Fetching files for:", name);
-      const res = await fetch(`${API}?action=getFiles&show=${encodeURIComponent(name)}`);
+      const res = await fetch(`${API}?action=getFiles&show=${name}`);
       const json = await res.json();
-      console.log("Files response:", json);
-      
-      if (Array.isArray(json)) {
-        setFiles(json);
-      } else if (json.data && Array.isArray(json.data)) {
-        setFiles(json.data);
-      } else {
-        setFiles([]);
-      }
+      setFiles(Array.isArray(json) ? json : []);
     } catch (e) {
-      console.error("Error loading files:", e);
+      console.error(e);
       setFiles([]);
     }
   }
@@ -72,36 +43,35 @@ export default function App() {
     return url?.match(/[-\w]{25,}/)?.[0];
   }
 
+  // 🔥 SIMPLE DOWNLOAD (OUVRE GOOGLE DRIVE)
   function openDownload(file) {
     if (!file?.url) return;
     window.open(file.url, "_blank");
   }
 
   return (
-    <div className="app">
-      {/* SIDEBAR */}
-      <div className="sidebar">
-        <h3 className="title">🎭 MAGMA SHOW</h3>
+    <div style={styles.app}>
 
-        <button className="btn" onClick={loadShows}>
+      {/* LEFT */}
+      <div style={styles.left}>
+        <h3 style={styles.title}>🎭 MAGMA SHOW</h3>
+
+        <button style={styles.btn} onClick={loadShows}>
           Rafraîchir
         </button>
 
-        {/* DEBUG INFO */}
-        {loading && <div style={{color: "yellow", padding: 10}}>Chargement...</div>}
-        {error && <div style={{color: "red", padding: 10}}>Erreur: {error}</div>}
-        {!loading && shows.length === 0 && !error && (
-          <div style={{color: "orange", padding: 10}}>Aucun spectacle trouvé</div>
-        )}
-
-        <div className="show-list">
+        <div>
           {shows.map((s, i) => {
             const name = s.name || s;
             return (
               <div
                 key={i}
                 onClick={() => openShow(name)}
-                className={`show-item ${selectedShow === name ? "active" : ""}`}
+                style={{
+                  ...styles.item,
+                  background:
+                    selectedShow === name ? "#333" : "#1a1a1a"
+                }}
               >
                 🎬 {name}
               </div>
@@ -110,32 +80,38 @@ export default function App() {
         </div>
       </div>
 
-      {/* CONTENT */}
-      <div className="content">
+      {/* RIGHT */}
+      <div style={styles.right}>
         {!selectedShow && (
-          <div className="empty">Choisis un spectacle</div>
+          <div style={styles.empty}>
+            Choisis un spectacle
+          </div>
         )}
 
         {selectedShow && (
           <>
             <h2>{selectedShow}</h2>
 
-            <div className="file-list">
+            <div>
               {files.map((f, i) => (
-                <div key={i} className="file-row">
+                <div key={i} style={styles.fileRow}>
+
+                  {/* OPEN PLAYER */}
                   <span
                     onClick={() => setActiveFile(f)}
-                    className="file-name"
+                    style={styles.fileName}
                   >
                     📄 {f.name}
                   </span>
 
+                  {/* DOWNLOAD SAFE */}
                   <button
-                    className="download-btn"
+                    style={styles.downloadBtn}
                     onClick={() => openDownload(f)}
                   >
                     Télécharger
                   </button>
+
                 </div>
               ))}
             </div>
@@ -143,29 +119,123 @@ export default function App() {
         )}
       </div>
 
-      {/* MODAL PLAYER */}
+      {/* PLAYER STABLE (1 SEUL SYSTEM DRIVE) */}
       {activeFile && (
-        <div className="modal" onClick={() => setActiveFile(null)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modal}>
+          <div style={styles.modalBox}>
+
             <button
-              className="close-btn"
+              style={styles.close}
               onClick={() => setActiveFile(null)}
             >
               ✕
             </button>
 
-            <h3 className="modal-title">{activeFile.name}</h3>
+            <h3>{activeFile.name}</h3>
 
-            <div className="video-wrapper">
-              <iframe
-                src={`[drive.google.com](https://drive.google.com/file/d/${getId(activeFile.url)}/preview)`}
-                allow="autoplay"
-                allowFullScreen
-              ></iframe>
-            </div>
+            <iframe
+              style={styles.viewer}
+              src={`[drive.google.com](https://drive.google.com/file/d/${getId()
+                activeFile.url
+              )}/preview`}
+            />
+
           </div>
         </div>
       )}
     </div>
   );
 }
+
+/* ---------------- STYLE ---------------- */
+const styles = {
+  app: {
+    display: "flex",
+    height: "100vh",
+    background: "#0f0f0f",
+    color: "white",
+    fontFamily: "Arial"
+  },
+
+  left: {
+    width: 260,
+    background: "#111",
+    padding: 15
+  },
+
+  title: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 10
+  },
+
+  btn: {
+    width: "100%",
+    padding: 8,
+    marginBottom: 10,
+    cursor: "pointer"
+  },
+
+  item: {
+    padding: 10,
+    marginTop: 8,
+    cursor: "pointer",
+    borderRadius: 6
+  },
+
+  right: {
+    flex: 1,
+    padding: 20
+  },
+
+  empty: {
+    opacity: 0.6,
+    fontSize: 18
+  },
+
+  fileRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    padding: 10,
+    marginTop: 10,
+    background: "#1a1a1a",
+    borderRadius: 6
+  },
+
+  fileName: {
+    cursor: "pointer"
+  },
+
+  downloadBtn: {
+    cursor: "pointer"
+  },
+
+  modal: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.95)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center"
+  },
+
+  modalBox: {
+    width: "90%",
+    height: "90%",
+    position: "relative"
+  },
+
+  close: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    padding: 10,
+    cursor: "pointer"
+  },
+
+  viewer: {
+    width: "100%",
+    height: "90%",
+    border: "none"
+  }
+};
