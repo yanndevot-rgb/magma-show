@@ -9,19 +9,39 @@ export default function App() {
   const [selectedShow, setSelectedShow] = useState(null);
   const [files, setFiles] = useState([]);
   const [activeFile, setActiveFile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadShows();
   }, []);
 
   async function loadShows() {
+    setLoading(true);
+    setError(null);
     try {
+      console.log("Fetching shows from API...");
       const res = await fetch(`${API}?action=getPrestations`);
+      console.log("Response status:", res.status);
       const json = await res.json();
-      setShows(Array.isArray(json) ? json : []);
+      console.log("API response:", json);
+      
+      if (Array.isArray(json)) {
+        setShows(json);
+        console.log("Shows loaded:", json.length);
+      } else if (json.data && Array.isArray(json.data)) {
+        setShows(json.data);
+        console.log("Shows loaded from json.data:", json.data.length);
+      } else {
+        console.log("Unexpected response format:", typeof json);
+        setShows([]);
+      }
     } catch (e) {
-      console.error(e);
+      console.error("Error loading shows:", e);
+      setError(e.message);
       setShows([]);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -30,11 +50,20 @@ export default function App() {
     setActiveFile(null);
 
     try {
-      const res = await fetch(`${API}?action=getFiles&show=${name}`);
+      console.log("Fetching files for:", name);
+      const res = await fetch(`${API}?action=getFiles&show=${encodeURIComponent(name)}`);
       const json = await res.json();
-      setFiles(Array.isArray(json) ? json : []);
+      console.log("Files response:", json);
+      
+      if (Array.isArray(json)) {
+        setFiles(json);
+      } else if (json.data && Array.isArray(json.data)) {
+        setFiles(json.data);
+      } else {
+        setFiles([]);
+      }
     } catch (e) {
-      console.error(e);
+      console.error("Error loading files:", e);
       setFiles([]);
     }
   }
@@ -57,6 +86,13 @@ export default function App() {
         <button className="btn" onClick={loadShows}>
           Rafraîchir
         </button>
+
+        {/* DEBUG INFO */}
+        {loading && <div style={{color: "yellow", padding: 10}}>Chargement...</div>}
+        {error && <div style={{color: "red", padding: 10}}>Erreur: {error}</div>}
+        {!loading && shows.length === 0 && !error && (
+          <div style={{color: "orange", padding: 10}}>Aucun spectacle trouvé</div>
+        )}
 
         <div className="show-list">
           {shows.map((s, i) => {
