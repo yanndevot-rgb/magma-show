@@ -122,12 +122,10 @@ export default function App() {
 
             <div className="video-wrapper">
               <iframe
-                src={`[drive.google.com](https://drive.google.com/file/d/${getId()
-                  activeFile.url
-                )}/preview`}
+                src={`[drive.google.com](https://drive.google.com/file/d/${getId(activeFile.url)}/preview)`}
                 allow="autoplay"
                 allowFullScreen
-              />
+              ></iframe>
             </div>
           </div>
         </div>
