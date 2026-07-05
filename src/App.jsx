@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import "./App.css";
 
 const API =
-  "https://script.google.com/macros/s/AKfycbwhoChGw1YqSJAubp1_XKUsGz_1Q4qKqlvfN3hLFoO1xMG8m4gJOeggyn3VOyHrTpBrYg/exec";
+  "[script.google.com](https://script.google.com/macros/s/AKfycbwhoChGw1YqSJAubp1_XKUsGz_1Q4qKqlvfN3hLFoO1xMG8m4gJOeggyn3VOyHrTpBrYg/exec)";
 
 export default function App() {
   const [shows, setShows] = useState([]);
@@ -43,35 +43,29 @@ export default function App() {
     return url?.match(/[-\w]{25,}/)?.[0];
   }
 
-  // 🔥 SIMPLE DOWNLOAD (OUVRE GOOGLE DRIVE)
   function openDownload(file) {
     if (!file?.url) return;
     window.open(file.url, "_blank");
   }
 
   return (
-    <div style={styles.app}>
+    <div className="app">
+      {/* SIDEBAR */}
+      <div className="sidebar">
+        <h3 className="title">🎭 MAGMA SHOW</h3>
 
-      {/* LEFT */}
-      <div style={styles.left}>
-        <h3 style={styles.title}>🎭 MAGMA SHOW</h3>
-
-        <button style={styles.btn} onClick={loadShows}>
+        <button className="btn" onClick={loadShows}>
           Rafraîchir
         </button>
 
-        <div>
+        <div className="show-list">
           {shows.map((s, i) => {
             const name = s.name || s;
             return (
               <div
                 key={i}
                 onClick={() => openShow(name)}
-                style={{
-                  ...styles.item,
-                  background:
-                    selectedShow === name ? "#333" : "#1a1a1a"
-                }}
+                className={`show-item ${selectedShow === name ? "active" : ""}`}
               >
                 🎬 {name}
               </div>
@@ -80,38 +74,32 @@ export default function App() {
         </div>
       </div>
 
-      {/* RIGHT */}
-      <div style={styles.right}>
+      {/* CONTENT */}
+      <div className="content">
         {!selectedShow && (
-          <div style={styles.empty}>
-            Choisis un spectacle
-          </div>
+          <div className="empty">Choisis un spectacle</div>
         )}
 
         {selectedShow && (
           <>
             <h2>{selectedShow}</h2>
 
-            <div>
+            <div className="file-list">
               {files.map((f, i) => (
-                <div key={i} style={styles.fileRow}>
-
-                  {/* OPEN PLAYER */}
+                <div key={i} className="file-row">
                   <span
                     onClick={() => setActiveFile(f)}
-                    style={styles.fileName}
+                    className="file-name"
                   >
                     📄 {f.name}
                   </span>
 
-                  {/* DOWNLOAD SAFE */}
                   <button
-                    style={styles.downloadBtn}
+                    className="download-btn"
                     onClick={() => openDownload(f)}
                   >
                     Télécharger
                   </button>
-
                 </div>
               ))}
             </div>
@@ -119,123 +107,31 @@ export default function App() {
         )}
       </div>
 
-      {/* PLAYER STABLE (1 SEUL SYSTEM DRIVE) */}
+      {/* MODAL PLAYER */}
       {activeFile && (
-        <div style={styles.modal}>
-          <div style={styles.modalBox}>
-
+        <div className="modal" onClick={() => setActiveFile(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <button
-              style={styles.close}
+              className="close-btn"
               onClick={() => setActiveFile(null)}
             >
               ✕
             </button>
 
-            <h3>{activeFile.name}</h3>
+            <h3 className="modal-title">{activeFile.name}</h3>
 
-            <iframe
-              style={styles.viewer}
-              src={`https://drive.google.com/file/d/${getId(
-                activeFile.url
-              )}/preview`}
-            />
-
+            <div className="video-wrapper">
+              <iframe
+                src={`[drive.google.com](https://drive.google.com/file/d/${getId()
+                  activeFile.url
+                )}/preview`}
+                allow="autoplay"
+                allowFullScreen
+              />
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
-
-/* ---------------- STYLE ---------------- */
-const styles = {
-  app: {
-    display: "flex",
-    height: "100vh",
-    background: "#0f0f0f",
-    color: "white",
-    fontFamily: "Arial"
-  },
-
-  left: {
-    width: 260,
-    background: "#111",
-    padding: 15
-  },
-
-  title: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 10
-  },
-
-  btn: {
-    width: "100%",
-    padding: 8,
-    marginBottom: 10,
-    cursor: "pointer"
-  },
-
-  item: {
-    padding: 10,
-    marginTop: 8,
-    cursor: "pointer",
-    borderRadius: 6
-  },
-
-  right: {
-    flex: 1,
-    padding: 20
-  },
-
-  empty: {
-    opacity: 0.6,
-    fontSize: 18
-  },
-
-  fileRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    padding: 10,
-    marginTop: 10,
-    background: "#1a1a1a",
-    borderRadius: 6
-  },
-
-  fileName: {
-    cursor: "pointer"
-  },
-
-  downloadBtn: {
-    cursor: "pointer"
-  },
-
-  modal: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.95)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center"
-  },
-
-  modalBox: {
-    width: "90%",
-    height: "90%",
-    position: "relative"
-  },
-
-  close: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    padding: 10,
-    cursor: "pointer"
-  },
-
-  viewer: {
-    width: "100%",
-    height: "90%",
-    border: "none"
-  }
-};

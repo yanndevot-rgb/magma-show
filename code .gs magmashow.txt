@@ -1,0 +1,1694 @@
+function onOpen() {
+
+  SpreadsheetApp.getUi()
+    .createMenu("MAGMA SHOW")
+
+    .addItem(
+      "🚀 Export spectacle 1 clic",
+      "EXPORT_SPECTACLE_1_CLIC"
+    )
+
+    .addItem(
+      "🔄 Refresh global",
+      "REFRESH_GLOBAL"
+    )
+
+    .addSeparator()
+
+    .addItem(
+      "📁 Importer fichiers",
+      "ouvrirImportFichiers"
+    )
+
+    .addToUi();
+}
+/**************************************************
+ * CONFIG GÉNÉRALE
+ **************************************************/
+const ADRESSE_SOCIETE = "Magma Show Paris, 8 rue des Bûcherons, 94400 Marolles-en-Brie";
+/**************************************************
+ * OUTIL DOSSIERS (OBLIGATOIRE)
+ **************************************************/
+function getOrCreateFolder(name, parent) {
+  const it = parent.getFoldersByName(name);
+  return it.hasNext() ? it.next() : parent.createFolder(name);
+}
+
+/**************************************************
+ * INSTALLATION
+ **************************************************/
+function INSTALLER_ONEDIT() {
+  SpreadsheetApp.getUi().alert(
+    "✅ Script installé\n\n" +
+    "• onEdit unique\n" +
+    "• automatisme CONDUITE actif\n" +
+    "• COSTUMES uniquement par boutons"
+  );
+}
+
+/**************************************************
+ * OUTILS
+ **************************************************/
+function norm(t) {
+  return t.toString().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+/**************************************************
+ * NORMALISATION TEXTE (CLÉ MATCH)
+ **************************************************/
+function normaliser(str) {
+  if (!str) return "";
+  return str.toString().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**************************************************
+ * REFRESH BASE (MP3 / TEXTES / VIDÉOS)
+ **************************************************/
+function refreshBase(folderName, sheetName, extensions) {
+
+  const ss = SpreadsheetApp.getActive();
+  let sh = ss.getSheetByName(sheetName);
+
+  // ➕ Création si absente
+  if (!sh) {
+    sh = ss.insertSheet(sheetName);
+    sh.getRange("A1").setValue("Nom");
+    sh.getRange("B1").setValue("Durée");
+    sh.getRange("C1").setValue("Ballet");
+  }
+
+  // 🔒 On ne touche QU’À LA COLONNE A (lignes données)
+  const lastRow = sh.getLastRow();
+  if (lastRow > 1) {
+    sh.getRange(2, 1, lastRow - 1, 1).clearContent();
+  }
+
+  const root = DriveApp.getRootFolder();
+  const folder = getOrCreateFolder(folderName, root);
+  const list = [];
+
+  (function scan(f) {
+    const files = f.getFiles();
+    while (files.hasNext()) {
+      const file = files.next();
+      extensions.forEach(ext => {
+        if (file.getName().toLowerCase().endsWith("." + ext)) {
+          list.push(
+            file.getName().replace(new RegExp("\\." + ext + "$", "i"), "")
+          );
+        }
+      });
+    }
+    const subs = f.getFolders();
+    while (subs.hasNext()) scan(subs.next());
+  })(folder);
+
+  list.sort();
+
+  // ✍️ Réécriture UNIQUEMENT des noms
+  list.forEach((name, i) => {
+    sh.getRange(i + 2, 1).setValue(name);
+  });
+}
+/**************************************************
+ * EXPORT MÉDIAS (MP3 / TEXTES / VIDÉOS)
+ **************************************************/
+function exporterMedias(exportFolder, data) {
+
+  if (!data || !Array.isArray(data)) return;
+
+  const root = DriveApp.getRootFolder();
+
+  /******** MP3 ********/
+  const mp3Src = getOrCreateFolder("Musique Spectacles Magma Show Paris", root);
+  const mp3Idx = {};
+  const fM = mp3Src.getFiles();
+
+  while (fM.hasNext()) {
+    const f = fM.next();
+    if (f.getName().toLowerCase().endsWith(".mp3")) {
+      mp3Idx[normaliser(f.getName().replace(".mp3", ""))] = f;
+    }
+  }
+
+  const usedMP3 = {};
+  let num = 1;
+
+  data.forEach(r => {
+    if (!r || !r[0]) return;
+
+    const key = normaliser(r[0]);
+    if (!mp3Idx[key] || usedMP3[key]) return;
+
+    const prefix = (num < 10 ? "0" : "") + num + " - ";
+    mp3Idx[key].makeCopy(prefix + r[0] + ".mp3", exportFolder);
+
+    usedMP3[key] = true;
+    num++;
+  });
+
+  /******** TEXTES ********/
+const txtSrc = getOrCreateFolder(
+  "Textes Spectacles Magma Show Paris",
+  root
+);
+
+const txtIdx = {};
+const fT = txtSrc.getFiles();
+
+while (fT.hasNext()) {
+
+  const f = fT.next();
+
+  txtIdx[
+    normaliser(
+      f.getName().replace(/\.[^/.]+$/, "")
+    )
+  ] = f;
+}
+
+const usedTxt = {};
+
+data.forEach(r => {
+
+  if (!r || !r[2]) return;
+
+  const key = normaliser(r[2]);
+
+  if (txtIdx[key] && !usedTxt[key]) {
+
+    const sourceFile = txtIdx[key];
+
+    try {
+
+      const blob = sourceFile.getBlob();
+
+      Drive.Files.create(
+        {
+          name: sourceFile.getName().replace(/\.[^/.]+$/, ""),
+          parents: [exportFolder.getId()],
+          mimeType: "application/vnd.google-apps.document"
+        },
+        blob
+      );
+
+    } catch (err) {
+
+      Logger.log(err);
+
+      sourceFile.makeCopy(
+        sourceFile.getName(),
+        exportFolder
+      );
+
+    }
+
+    usedTxt[key] = true;
+  }
+});
+
+  /******** VIDÉOS ********/
+  const it = DriveApp.getFoldersByName("VIDEOS MAGMA SHOW PARIS");
+  if (!it.hasNext()) return;
+
+  const videoSrc = it.next();
+  const videoDst = getOrCreateFolder("VIDEOS", exportFolder);
+  const vidIdx = {};
+  const fV = videoSrc.getFiles();
+
+  while (fV.hasNext()) {
+    const f = fV.next();
+    vidIdx[normaliser(f.getName().replace(/\.[^/.]+$/, ""))] = f;
+  }
+
+  const usedVid = {};
+  data.forEach(r => {
+    if (!r || !r[3]) return;
+
+    const key = normaliser(r[3]);
+    if (vidIdx[key] && !usedVid[key]) {
+      vidIdx[key].makeCopy(vidIdx[key].getName(), videoDst);
+      usedVid[key] = true;
+    }
+  });
+}
+/**************************************************
+ * CONDUITE (avec artiste par morceau)
+ **************************************************/
+/**************************************************
+ * CONDUITE – MISE EN PAGE ÉQUILIBRÉE
+ **************************************************/
+function creerConduite(exportFolder, titre, artistesShow, data) {
+
+  const doc = DocumentApp.create("CONDUITE – " + titre);
+  const file = DriveApp.getFileById(doc.getId());
+  exportFolder.addFile(file);
+  DriveApp.getRootFolder().removeFile(file);
+
+  const body = doc.getBody();
+
+  /* ===== TITRE SPECTACLE ===== */
+  body.appendParagraph("CONDUITE — " + titre)
+    .setBold(true)
+    .setFontSize(18);
+
+  /* ===== ARTISTES PRÉSENTS ===== */
+  if (artistesShow) {
+    body.appendParagraph("Artistes présents : " + artistesShow)
+      .setFontSize(13)
+      .setItalic(true)
+      .setForegroundColor("#555555");
+  }
+
+  // ⬅️ UN SEUL ESPACE AVANT PARTIE 1
+  body.appendParagraph("");
+
+  let part = 1;
+  let num = 1;
+  let tp = 0;
+  let ts = 0;
+  let buffer = [];
+
+  function flushPart() {
+    if (!buffer.length) return;
+
+    /* ===== TITRE PARTIE ===== */
+    body.appendParagraph("PARTIE " + part)
+      .setBold(true)
+      .setFontSize(16)
+      .setForegroundColor("#1c4587");
+
+    // ⬅️ PAS DE LIGNE VIDE SUPPLÉMENTAIRE ICI
+
+   buffer.forEach(item => {
+
+  const p = body.appendParagraph(" ")
+    .setFontSize(13)
+    .setBold(false);
+
+  // 🎵 Titre + durée (GRAS)
+  const t1 = p.editAsText();
+  t1.setText(item.main);
+  t1.setForegroundColor("#000000");
+  t1.setFontSize(13);
+  t1.setBold(true);
+
+  // 🎤 Artiste (couleur différente, gras)
+  if (item.artiste) {
+    const t2 = p.appendText(item.artiste);
+    t2.setForegroundColor("#6a329f"); // violet
+    t2.setBold(true);
+    t2.setFontSize(13);
+  }
+});
+
+
+    // ⬅️ ESPACE AVANT DURÉE DE PARTIE
+    body.appendParagraph("");
+
+    body.appendParagraph(
+      "Durée PARTIE " + part + " : " + dureeTotale(tp)
+    )
+    .setItalic(true)
+    .setFontSize(12)
+    .setForegroundColor("#38761d");
+
+    // ⬅️ PETIT ESPACE AVANT PARTIE SUIVANTE
+    body.appendParagraph("");
+
+    buffer = [];
+    tp = 0;
+    part++;
+  }
+
+  data.forEach((r, i) => {
+
+    // Séparation de partie
+    if (!r[0]) {
+      for (let j = i + 1; j < data.length; j++) {
+        if (data[j][0]) {
+          flushPart();
+          break;
+        }
+      }
+      return;
+    }
+
+    const sec = dureeVersSecondes(r[4]);
+    tp += sec;
+    ts += sec;
+
+    const mainText =
+      (num < 10 ? "0" : "") +
+      num + ". " +
+      r[0] +
+      " (" + dureeChanson(sec) + ")";
+
+    const artisteText = r[1] ? " — 🎤 " + r[1] : "";
+
+    buffer.push({
+      main: mainText,
+      artiste: artisteText
+    });
+
+    num++;
+  });
+
+  flushPart();
+
+  /* ===== DURÉE TOTALE ===== */
+  body.appendParagraph("");
+
+  body.appendParagraph("Durée totale : " + dureeTotale(ts))
+    .setBold(true)
+    .setFontSize(13)
+    .setForegroundColor("#274e13");
+
+  doc.saveAndClose();
+}
+
+
+/**************************************************
+ * ON EDIT UNIQUE
+ **************************************************/
+function onEdit(e) {
+
+  if (!e || !e.range) return;
+
+  const sh = e.range.getSheet();
+
+  // CONDUITE
+  if (sh.getName() === "CONDUITE") {
+    AUTO_INFOS_CHANSON_CONDUITE(e);
+    return;
+  }
+
+  // COSTUMES (menu multiple)
+  if (sh.getName() === "COSTUMES" || sh.getName() === "COSTUMES_OK") {
+    GESTION_MENU_MULTI_COSTUMES(e);
+    return;
+  }
+}
+
+
+/**************************************************
+ * AUTO – INFOS CHANSON DANS CONDUITE
+ * (Durée + Ballet depuis BASE_CHANSONS)
+ **************************************************/
+function AUTO_INFOS_CHANSON_CONDUITE(e) {
+
+  if (!e || !e.range) return;
+
+  const sh = e.range.getSheet();
+
+  // 🎯 uniquement feuille CONDUITE
+  if (sh.getName() !== "CONDUITE") return;
+
+  // 🎯 uniquement colonne A (titre chanson)
+  if (e.range.getColumn() !== 1 || e.range.getRow() < 2) return;
+
+  const row = e.range.getRow();
+  const titre = e.range.getDisplayValue();
+
+  // 🧹 si cellule vidée → on nettoie
+  if (!titre) {
+    sh.getRange(row, 5).clearContent();  // Durée (E)
+    sh.getRange(row, 10).clearContent(); // Ballet (J)
+    return;
+  }
+
+  const base = SpreadsheetApp.getActive()
+    .getSheetByName("BASE_CHANSONS");
+  if (!base) return;
+
+  function norm(t) {
+    return t.toString().toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  const key = norm(titre);
+
+  const baseData = base
+    .getRange(2, 1, base.getLastRow() - 1, 3)
+    .getDisplayValues();
+
+  let duree = "";
+  let ballet = "";
+
+  for (let i = 0; i < baseData.length; i++) {
+    if (norm(baseData[i][0]) === key) {
+      duree  = baseData[i][1]; // colonne B
+      ballet = baseData[i][2]; // colonne C
+      break;
+    }
+  }
+
+  // ✍️ écriture
+  sh.getRange(row, 5).setValue(duree);
+  sh.getRange(row, 10).setValue(ballet);
+}
+/**************************************************
+ * OUTILS DURÉES (OBLIGATOIRES)
+ **************************************************/
+function dureeVersSecondes(d) {
+  if (!d) return 0;
+
+  // Durée Google Sheets (fraction de jour)
+  if (typeof d === "number") {
+    return Math.round(d * 86400);
+  }
+
+  // Objet Date
+  if (Object.prototype.toString.call(d) === "[object Date]") {
+    return d.getMinutes() * 60 + d.getSeconds();
+  }
+
+  // Texte mm:ss
+  if (typeof d === "string" && d.indexOf(":") > -1) {
+    var p = d.split(":");
+    return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
+  }
+
+  return 0;
+}
+
+function dureeChanson(sec) {
+  var m = Math.floor(sec / 60);
+  var s = sec % 60;
+  return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+}
+
+function dureeTotale(sec) {
+  var h = Math.floor(sec / 3600);
+  var m = Math.floor((sec % 3600) / 60);
+  var s = sec % 60;
+
+  if (h > 0) {
+    return h + ":" + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+  }
+  return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+}
+
+/**************************************************
+ * CRÉER COSTUMES_OK (FEUILLET SAIN)
+ **************************************************/
+function CREER_COSTUMES_OK() {
+
+  const ss = SpreadsheetApp.getActive();
+  const old = ss.getSheetByName("COSTUMES_OK");
+  if (old) ss.deleteSheet(old);
+
+  const sh = ss.insertSheet("COSTUMES_OK");
+
+  const blocs = [
+    { t:"COSTUMES DANSEUSES", c:1, h:["Ballet","Costume","Bijoux","Chaussures","Accessoires","Cheveux"] },
+    { t:"COSTUMES DANSEURS", c:8, h:["Ballet","Costume","Bijoux","Chaussures","Accessoires"] },
+    { t:"COSTUMES CHANTEUSES", c:14, h:["Ballet","Costume","Bijoux","Chaussures","Accessoires","Cheveux"] },
+    { t:"COSTUMES CHANTEUR", c:21, h:["Ballet","Costume","Bijoux","Chaussures","Accessoires"] }
+  ];
+
+  blocs.forEach(b => {
+    sh.getRange(1,b.c).setValue(b.t).setFontWeight("bold").setBackground("#ffe599");
+    sh.getRange(2,b.c,1,b.h.length).setValues([b.h]).setFontWeight("bold").setBackground("#f9cb9c");
+    sh.getRange(3,b.c,30,b.h.length).clearContent();
+  });
+
+  sh.setFrozenRows(2);
+  sh.autoResizeColumns(1, sh.getLastColumn());
+}
+function IMPORTER_CONDUITE_VERS_COSTUMES_OK() {
+
+  const ss = SpreadsheetApp.getActive();
+  const conduite = ss.getSheetByName("CONDUITE");
+  const costumes = ss.getSheetByName("COSTUMES_OK");
+
+  if (!conduite || !costumes) {
+    SpreadsheetApp.getUi().alert("❌ CONDUITE ou COSTUMES_OK introuvable");
+    return;
+  }
+
+  const lastRow = conduite.getLastRow();
+  if (lastRow < 2) {
+    SpreadsheetApp.getUi().alert("❌ Aucune chanson dans la conduite");
+    return;
+  }
+
+  // 🎭 Ballets depuis CONDUITE colonne J
+  const ballets = conduite
+    .getRange(2, 10, lastRow - 1, 1)
+    .getDisplayValues()
+    .flat();
+
+  // Colonnes BALLET dans COSTUMES_OK
+  const balletCols = [1, 8, 14, 21]; // A, H, N, U
+
+  // 🧹 Nettoyage préalable (uniquement colonne BALLET)
+  balletCols.forEach(col => {
+    costumes.getRange(3, col, 30, 1).clearContent();
+  });
+
+  // ✍️ Écriture
+  ballets.forEach((ballet, i) => {
+    if (!ballet) return;
+
+    const row = i + 3; // ligne 3 = première ligne utile
+
+    balletCols.forEach(col => {
+      costumes.getRange(row, col).setValue(ballet);
+    });
+  });
+
+  SpreadsheetApp.getUi().alert(
+    "✅ Conduite importée dans COSTUMES_OK\n\n" +
+    "• Ballets copiés depuis CONDUITE (col J)\n" +
+    "• Ligne 3 → 30\n" +
+    "• Aucun automatisme après import"
+  );
+}
+
+/**************************************************
+ * IMPORTER BALLETS : CONDUITE → COSTUMES_OK
+ **************************************************/
+function IMPORTER_BALLETS_VERS_COSTUMES_OK() {
+
+  const ss = SpreadsheetApp.getActive();
+  const conduite = ss.getSheetByName("CONDUITE");
+  const costumes = ss.getSheetByName("COSTUMES_OK");
+
+  if (!conduite || !costumes) return;
+
+  const ballets = conduite.getRange(2,10,29,1).getDisplayValues().flat();
+  const cols = [1,8,14,21];
+
+  cols.forEach(c => costumes.getRange(3,c,30,1).clearContent());
+
+  ballets.forEach((b,i) => {
+    if (!b) return;
+    cols.forEach(c => costumes.getRange(i+3,c).setValue(b));
+  });
+}
+
+/**************************************************
+ * IMPORTER BASE_COSTUMES → COSTUMES_OK
+ * (UNE FOIS, PUIS LIBRE ÉDITION)
+ **************************************************/
+function IMPORTER_BASE_VERS_COSTUMES_OK() {
+
+  const ss = SpreadsheetApp.getActive();
+  const costumes = ss.getSheetByName("COSTUMES_OK");
+  const base = ss.getSheetByName("BASE_COSTUMES");
+  if (!costumes || !base) return;
+
+  const baseData = base.getDataRange().getDisplayValues();
+
+  const blocs = [
+    { bCol:1, sCol:2, baseCol:1, n:5 },
+    { bCol:8, sCol:9, baseCol:8, n:4 },
+    { bCol:14, sCol:15, baseCol:14, n:5 },
+    { bCol:21, sCol:22, baseCol:21, n:4 }
+  ];
+
+  blocs.forEach(bloc => {
+
+    costumes.getRange(3, bloc.sCol, 30, bloc.n).clearContent();
+
+    for (let r=3; r<=30; r++) {
+      const ballet = costumes.getRange(r, bloc.bCol).getDisplayValue();
+      if (!ballet) continue;
+
+      const key = norm(ballet);
+
+      for (let i=2; i<baseData.length; i++) {
+        if (baseData[i][bloc.baseCol-1] && norm(baseData[i][bloc.baseCol-1]).startsWith(key)) {
+          costumes.getRange(r, bloc.sCol, 1, bloc.n)
+            .setValues([baseData[i].slice(bloc.baseCol, bloc.baseCol+bloc.n)]);
+          break;
+        }
+      }
+    }
+  });
+}
+function GESTION_MENU_MULTI_COSTUMES(e) {
+
+  const cell = e.range;
+  const newValue = e.value;
+  const oldValue = e.oldValue;
+
+  if (!newValue) return;
+
+  const rule = cell.getDataValidation();
+  if (!rule) return;
+
+  // si modification manuelle → ne rien faire
+  if (oldValue && newValue.length > oldValue.length) return;
+
+  let items = [];
+
+  if (oldValue) {
+    items = oldValue
+      .split(/[,+]/)
+      .map(v => v.trim())
+      .filter(v => v);
+  }
+
+  const index = items.indexOf(newValue);
+
+  if (index > -1) {
+    items.splice(index,1);
+  } else {
+    items.push(newValue);
+  }
+
+  items = [...new Set(items)];
+
+  cell.setValue(items.join(" + "));
+}
+
+function EXPORTER_COSTUMES_OK_PDF() {
+
+  const ss = SpreadsheetApp.getActive();
+  const conduite = ss.getSheetByName("CONDUITE");
+  const costumes = ss.getSheetByName("COSTUMES_OK");
+
+  if (!conduite || !costumes) {
+    SpreadsheetApp.getUi().alert("❌ CONDUITE ou COSTUMES_OK introuvable");
+    return;
+  }
+
+  // 🎭 Nom du spectacle
+  const nomSpectacle = conduite.getRange("F2").getDisplayValue();
+  if (!nomSpectacle) {
+    SpreadsheetApp.getUi().alert("❌ Nom du spectacle manquant (F2)");
+    return;
+  }
+
+  // 📁 Dossier EXPORTS / Spectacle
+  const root = DriveApp.getRootFolder();
+  const exports = getOrCreateFolder("EXPORTS", root);
+  const dossier = getOrCreateFolder(nomSpectacle, exports);
+
+  // 📋 Tableaux à exporter
+  const tableaux = [
+    { nom: "Danseuses", range: "A1:F30" },
+    { nom: "Danseurs", range: "H1:L30" },
+    { nom: "Chanteuses", range: "N1:S30" },
+    { nom: "Chanteur", range: "U1:Y30" }
+  ];
+
+  tableaux.forEach(tab => {
+
+    const tempName = "__TEMP_EXPORT_COSTUMES__";
+
+    // 🔄 Nettoyage feuille temporaire
+    const old = ss.getSheetByName(tempName);
+    if (old) ss.deleteSheet(old);
+
+    const temp = ss.insertSheet(tempName);
+
+    // 🏷️ TITRE UNIQUE (PAS DE SOUS-TITRE)
+    temp.getRange("A1")
+      .setValue(nomSpectacle)
+      .setFontSize(16)
+      .setFontWeight("bold");
+
+    // 📌 COLLAGE DU TABLEAU JUSTE SOUS LE TITRE
+    costumes
+      .getRange(tab.range)
+      .copyTo(temp.getRange("A2"), { contentsOnly: false });
+
+    // 🎨 Ajustements visuels
+    temp.autoResizeColumns(1, temp.getLastColumn());
+    temp.setFrozenRows(1);
+    ss.setActiveSheet(temp);
+
+    // 📄 EXPORT PDF – FORMAT PAYSAGE
+    const url =
+      "https://docs.google.com/spreadsheets/d/" + ss.getId() +
+      "/export?format=pdf" +
+      "&size=A4" +
+      "&portrait=false" +
+      "&fitw=true" +
+      "&scale=1" +
+      "&sheetnames=false" +
+      "&printtitle=false" +
+      "&pagenumbers=false" +
+      "&gridlines=true" +
+      "&fzr=false" +
+      "&gid=" + temp.getSheetId();
+
+    const token = ScriptApp.getOAuthToken();
+    const response = UrlFetchApp.fetch(url, {
+      headers: { Authorization: "Bearer " + token }
+    });
+
+    // 🧾 Nom du PDF
+    const pdfName =
+      nomSpectacle + " – Costumes " + tab.nom + ".pdf";
+
+    dossier.createFile(response.getBlob().setName(pdfName));
+
+    // 🧹 Nettoyage
+    ss.deleteSheet(temp);
+  });
+
+  SpreadsheetApp.getUi().alert(
+    "✅ Export COSTUMES terminé\n\n" +
+    "• Aucun espace inutile\n" +
+    "• Tableaux collés sous le titre\n" +
+    "• Format paysage\n" +
+    "• 4 PDF générés\n\n" +
+    "📁 EXPORTS / " + nomSpectacle
+  );
+}
+
+
+
+/**************************************************
+ * RESET COSTUMES_OK (SANS TOUCHER AUX MENUS)
+ **************************************************/
+function RESET_COSTUMES_OK() {
+
+  const sh = SpreadsheetApp.getActive().getSheetByName("COSTUMES_OK");
+  if (!sh) return;
+
+  const blocs = [
+    { c:1, w:6 },
+    { c:8, w:5 },
+    { c:14, w:6 },
+    { c:21, w:5 }
+  ];
+
+  blocs.forEach(b => sh.getRange(3,b.c,30,b.w).clearContent());
+}
+/**************************************************
+ * EXPORT SPECTACLE – COMPLET (MP3 + TEXTES + VIDÉOS + CONDUITE)
+ **************************************************/
+function EXPORT_SPECTACLE_COMPLET() {
+
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName("CONDUITE");
+  if (!sh) {
+    SpreadsheetApp.getUi().alert("❌ Feuille CONDUITE introuvable");
+    return;
+  }
+
+  const titre   = sh.getRange("F2").getDisplayValue();
+  const artistes= sh.getRange("F4").getDisplayValue();
+  const adresse = sh.getRange("F6").getDisplayValue();
+  const contact = sh.getRange("F8").getDisplayValue();
+
+  if (!titre) {
+    SpreadsheetApp.getUi().alert("❌ Nom du spectacle manquant (F2)");
+    return;
+  }
+
+  const data = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getDisplayValues();
+
+  const root = DriveApp.getRootFolder();
+  const exports = getOrCreateFolder("EXPORTS", root);
+  const dossier = getOrCreateFolder(titre, exports);
+
+  exporterMedias(dossier, data);
+  creerConduite(dossier, titre, artistes, data);
+  creerFicheRenseignements(dossier, titre, artistes, adresse, contact);
+
+  const lien = dossier.getUrl();
+
+  SpreadsheetApp.getUi().alert(
+    "✅ EXPORT TERMINÉ\n\n" +
+    "• MP3 numérotés\n" +
+    "• Textes copiés\n" +
+    "• Vidéos copiées\n" +
+    "• Conduite générée\n\n" +
+    "📁 " + lien
+  );
+}
+/**************************************************
+ * REFRESH GLOBAL MP3 + TEXTES + VIDÉOS
+ **************************************************/
+function REFRESH_GLOBAL() {
+
+  refreshBase(
+    "Musique Spectacles Magma Show Paris",
+    "BASE_CHANSONS",
+    ["mp3"]
+  );
+
+  refreshBase(
+    "Textes Spectacles Magma Show Paris",
+    "BASE_TEXTES",
+    ["pdf","doc","docx","txt"]
+  );
+
+  refreshBase(
+    "VIDEOS MAGMA SHOW PARIS",
+    "BASE_VIDEOS",
+    ["mp4","mov","avi"]
+  );
+
+  SpreadsheetApp.getUi().alert(
+    "✅ Bases MP3, Textes et Vidéos mises à jour"
+  );
+}
+/**************************************************
+ * FICHE RENSEIGNEMENTS
+ **************************************************/
+function creerFicheRenseignements(exportFolder, titre, artistesShow, adresse, contact) {
+
+  const ss = SpreadsheetApp.getActive();
+  const artSheet = ss.getSheetByName("BASE_ARTISTES");
+
+  /**************************************************
+   * INDEX DES ARTISTES
+   **************************************************/
+  const index = {};
+  if (artSheet && artSheet.getLastRow() > 1) {
+    artSheet
+      .getRange(2, 1, artSheet.getLastRow() - 1, 3)
+      .getValues()
+      .forEach(r => {
+        if (r[0]) {
+          index[r[0].toString().trim()] = {
+            info1: r[1] || "",
+            info2: r[2] || ""
+          };
+        }
+      });
+  }
+
+  /**************************************************
+   * CALCUL DISTANCE
+   **************************************************/
+  let distanceInfo = null;
+  if (adresse) {
+    try {
+      const directions = Maps.newDirectionFinder()
+        .setOrigin(ADRESSE_SOCIETE)
+        .setDestination(adresse)
+        .setMode(Maps.DirectionFinder.Mode.DRIVING)
+        .getDirections();
+
+      if (directions.routes.length) {
+        const leg = directions.routes[0].legs[0];
+        distanceInfo = {
+          distance: leg.distance.text,
+          duree: leg.duration.text
+        };
+      }
+    } catch (e) {
+      Logger.log("Erreur calcul distance : " + e);
+    }
+  }
+
+  /**************************************************
+   * CRÉATION DU DOCUMENT
+   **************************************************/
+  const doc = DocumentApp.create("FICHE RENSEIGNEMENTS – " + titre);
+  const file = DriveApp.getFileById(doc.getId());
+  exportFolder.addFile(file);
+  DriveApp.getRootFolder().removeFile(file);
+
+  const b = doc.getBody();
+
+  /**************************************************
+   * TITRE
+   **************************************************/
+  b.appendParagraph("FICHE DE RENSEIGNEMENTS")
+    .setBold(true)
+    .setFontSize(16);
+
+  b.appendParagraph("");
+  b.appendParagraph("Spectacle : " + titre)
+    .setBold(true);
+
+  /**************************************************
+ * ARTISTES
+ **************************************************/
+if (artistesShow) {
+
+  b.appendParagraph("");
+  b.appendParagraph("🎭 Artistes")
+    .setBold(true);
+
+  const tableData = [];
+
+  artistesShow
+    .split(",")
+    .map(a => a.trim())
+    .forEach(nom => {
+
+      const pointure =
+        index[nom] ? index[nom].info1 : "";
+
+      const repas =
+        index[nom] ? index[nom].info2 : "";
+
+      tableData.push([
+        nom,
+        pointure,
+        repas
+      ]);
+    });
+
+  const table = b.appendTable(tableData);
+
+  for (let r = 0; r < table.getNumRows(); r++) {
+
+    table.getRow(r)
+      .getCell(0)
+      .getChild(0)
+      .asParagraph()
+      .setBold(true);
+
+  }
+}
+
+  /**************************************************
+   * LIEU
+   **************************************************/
+  if (adresse) {
+    b.appendParagraph("");
+    b.appendParagraph("📍 Lieu")
+      .setBold(true);
+    b.appendParagraph(adresse);
+  }
+
+  /**************************************************
+   * CONTACT
+   **************************************************/
+  if (contact) {
+    b.appendParagraph("");
+    b.appendParagraph("📞 Contact sur place")
+      .setBold(true);
+    b.appendParagraph(contact);
+  }
+
+  /**************************************************
+   * DISTANCE
+   **************************************************/
+  if (distanceInfo) {
+    b.appendParagraph("");
+    b.appendParagraph("🚗 Accès depuis Magma Show Paris")
+      .setBold(true);
+    b.appendParagraph("Distance : " + distanceInfo.distance);
+    b.appendParagraph("Temps estimé : " + distanceInfo.duree);
+  }
+
+  b.appendParagraph("");
+  b.appendParagraph("— Fin de la fiche —")
+    .setItalic(true);
+
+  doc.saveAndClose();
+}
+
+/**************************************************
+ * EXPORT SPECTACLE – 1 CLIC
+ **************************************************/
+function EXPORT_SPECTACLE_1_CLIC() {
+
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName("CONDUITE");
+  if (!sh) {
+    SpreadsheetApp.getUi().alert("❌ Feuille CONDUITE introuvable");
+    return;
+  }
+
+  const titre   = sh.getRange("F2").getDisplayValue();
+  const artistes= sh.getRange("F4").getDisplayValue();
+  const adresse = sh.getRange("F6").getDisplayValue();
+  const contact = sh.getRange("F8").getDisplayValue();
+
+  if (!titre || !adresse) {
+    SpreadsheetApp.getUi().alert("❌ Titre ou adresse manquants (F2 / F6)");
+    return;
+  }
+
+  // 🔄 Mise à jour des bases
+  refreshBase("Musique Spectacles Magma Show Paris", "BASE_CHANSONS", ["mp3"]);
+  refreshBase("Textes Spectacles Magma Show Paris", "BASE_TEXTES", ["pdf","doc","docx","txt"]);
+  refreshBase("VIDEOS MAGMA SHOW PARIS", "BASE_VIDEOS", ["mp4","mov","avi"]);
+
+  // 📋 Données conduite
+  const data = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getDisplayValues();
+
+  // 📁 Dossier export
+  const root = DriveApp.getRootFolder();
+  const exports = getOrCreateFolder("EXPORTS", root);
+  const exportFolder = getOrCreateFolder(titre, exports);
+
+  // 🚀 Exports
+  exporterMedias(exportFolder, data);
+  creerConduite(exportFolder, titre, artistes, data);
+  creerFicheRenseignements(exportFolder, titre, artistes, adresse, contact);
+
+  // 📲 Lien WhatsApp
+  const msg =
+    'Voici les fichiers du spectacle "' +
+    titre +
+    '" :\n\n' +
+    exportFolder.getUrl();
+
+  const wa = "https://wa.me/?text=" + encodeURIComponent(msg);
+
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput(
+      '<a href="' + wa + '" target="_blank" ' +
+      'style="font-size:16px;padding:20px;background:#25D366;color:white;' +
+      'border-radius:8px;text-decoration:none;">📲 Envoyer sur WhatsApp</a>'
+    ),
+    "Export terminé"
+  );
+}
+/**************************************************
+ * NOUVELLE CONDUITE
+ * Réinitialise la conduite sans casser le reste
+ **************************************************/
+function NOUVELLE_CONDUITE() {
+
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName("CONDUITE");
+
+  if (!sh) {
+    SpreadsheetApp.getUi().alert("❌ Feuille CONDUITE introuvable");
+    return;
+  }
+
+  // 🔐 cellules à conserver
+  const keep = {
+    F1: sh.getRange("F1").getValue(),
+    F3: sh.getRange("F3").getValue(),
+    F5: sh.getRange("F5").getValue(),
+    F7: sh.getRange("F7").getValue()
+  };
+
+  // 🧹 effacement complet de la conduite
+  sh.getRange("A2:Z").clearContent();
+
+  // ♻️ restauration des infos fixes
+  sh.getRange("F1").setValue(keep.F1);
+  sh.getRange("F3").setValue(keep.F3);
+  sh.getRange("F5").setValue(keep.F5);
+  sh.getRange("F7").setValue(keep.F7);
+
+  SpreadsheetApp.getUi().alert("✅ Nouvelle conduite prête");
+}
+function WHATSAPP_ENVOYER_EXPORT() {
+
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName("CONDUITE");
+
+  if (!sh) {
+    SpreadsheetApp.getUi().alert("❌ Feuille CONDUITE introuvable");
+    return;
+  }
+
+  const titre = sh.getRange("F2").getDisplayValue();
+  if (!titre) {
+    SpreadsheetApp.getUi().alert("❌ Nom du spectacle manquant (CONDUITE!F2)");
+    return;
+  }
+
+  const root = DriveApp.getRootFolder();
+  const itExports = root.getFoldersByName("EXPORTS");
+
+  if (!itExports.hasNext()) {
+    SpreadsheetApp.getUi().alert("❌ Dossier EXPORTS introuvable");
+    return;
+  }
+
+  const exports = itExports.next();
+  const itShow = exports.getFoldersByName(titre);
+
+  if (!itShow.hasNext()) {
+    SpreadsheetApp.getUi().alert(
+      "❌ Aucun export trouvé pour ce spectacle.\n\n" +
+      "Fais d’abord l’export du spectacle."
+    );
+    return;
+  }
+
+  const exportFolder = itShow.next();
+  const lien = exportFolder.getUrl();
+
+  const message =
+    'Voici les fichiers du spectacle "' +
+    titre +
+    '" :\n\n' +
+    lien;
+
+  const waUrl =
+    "https://wa.me/?text=" + encodeURIComponent(message);
+
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput(
+      '<div style="font-family:sans-serif;text-align:center">' +
+      '<p style="font-size:16px;margin-bottom:20px;">📲 Envoi WhatsApp</p>' +
+      '<a href="' + waUrl + '" target="_blank" ' +
+      'style="display:inline-block;padding:15px 25px;' +
+      'background:#25D366;color:white;' +
+      'font-size:16px;border-radius:8px;' +
+      'text-decoration:none;">' +
+      'Envoyer sur WhatsApp</a>' +
+      '</div>'
+    ),
+    "WhatsApp – Export"
+  );
+}
+function NETTOYER_CHOIX_MULTIPLES_COSTUMES() {
+
+  const ss = SpreadsheetApp.getActive();
+  const sheets = ["COSTUMES", "COSTUMES_OK"];
+
+  sheets.forEach(name => {
+
+    const sh = ss.getSheetByName(name);
+    if (!sh) return;
+
+    const range = sh.getRange(3, 1, 28, sh.getLastColumn());
+    const values = range.getDisplayValues();
+
+    for (let r = 0; r < values.length; r++) {
+      for (let c = 0; c < values[r].length; c++) {
+
+        let v = values[r][c];
+        if (!v) continue;
+
+        // 🔧 normalisation lourde
+        v = v
+          .replace(/[\n\r]/g, " ")
+          .replace(/\u00A0/g, " ")
+          .replace(/[\/,;|]/g, "+")
+          .replace(/\s*\+\s*/g, "+")
+          .trim();
+
+        if (!v.includes("+")) {
+          values[r][c] = v;
+          continue;
+        }
+
+        const cleaned = [...new Set(
+          v.split("+")
+           .map(x => x.trim())
+           .filter(Boolean)
+        )].join(" + ");
+
+        values[r][c] = cleaned;
+      }
+    }
+
+    range.setValues(values);
+  });
+
+  SpreadsheetApp.getUi().alert(
+    "✅ Nettoyage COMPLET terminé\n\n" +
+    "• Tous séparateurs gérés (+ , / ; |)\n" +
+    "• Doublons supprimés partout\n" +
+    "• Espaces invisibles corrigés\n" +
+    "• Système maintenant stable"
+  );
+}
+function IMPORTER_BASE_COSTUMES_VERS_COSTUMES_OK() {
+
+  const ss = SpreadsheetApp.getActive();
+  const costumes = ss.getSheetByName("COSTUMES_OK");
+  const base = ss.getSheetByName("BASE_COSTUMES");
+
+  if (!costumes || !base) {
+    SpreadsheetApp.getUi().alert("❌ COSTUMES_OK ou BASE_COSTUMES introuvable");
+    return;
+  }
+
+  function norm(t) {
+    return t.toString().toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  const baseData = base.getDataRange().getDisplayValues();
+
+  const blocs = [
+    // DANSEUSES
+    { balletCol: 1, startCol: 2, baseBalletCol: 1, cols: 5 },
+
+    // DANSEURS
+    { balletCol: 8, startCol: 9, baseBalletCol: 8, cols: 4 },
+
+    // CHANTEUSES
+    { balletCol: 14, startCol: 15, baseBalletCol: 14, cols: 5 },
+
+    // CHANTEUR
+    { balletCol: 21, startCol: 22, baseBalletCol: 21, cols: 4 }
+  ];
+
+  blocs.forEach(bloc => {
+
+    // 🔄 nettoyage des colonnes costumes (pas les ballets)
+    costumes.getRange(3, bloc.startCol, 30, bloc.cols).clearContent();
+
+    for (let r = 3; r <= 30; r++) {
+
+      const ballet = costumes.getRange(r, bloc.balletCol).getDisplayValue();
+      if (!ballet) continue;
+
+      const key = norm(ballet);
+
+      for (let i = 2; i < baseData.length; i++) {
+
+        const baseBallet = baseData[i][bloc.baseBalletCol - 1];
+        if (!baseBallet) continue;
+
+        if (norm(baseBallet).startsWith(key)) {
+
+          const values = baseData[i].slice(
+            bloc.baseBalletCol,
+            bloc.baseBalletCol + bloc.cols
+          );
+
+          costumes
+            .getRange(r, bloc.startCol, 1, bloc.cols)
+            .setValues([values]);
+
+          break;
+        }
+      }
+    }
+  });
+
+  SpreadsheetApp.getUi().alert(
+    "✅ Import costumes terminé\n\n" +
+    "• Danseuses\n" +
+    "• Danseurs\n" +
+    "• Chanteuses\n" +
+    "• Chanteur\n\n" +
+    "Tous les blocs sont maintenant pris en compte."
+  );
+}function REFRESH_BASES_MEDIA() {
+
+  const ss = SpreadsheetApp.getActive();
+
+  // ======================
+  // BASES
+  // ======================
+  const baseMP3 = ss.getSheetByName("BASE_MP3");
+  const baseTXT = ss.getSheetByName("BASE_TEXTES");
+  const baseVID = ss.getSheetByName("BASE_VIDEOS");
+
+  if (!baseMP3 || !baseTXT || !baseVID) {
+    SpreadsheetApp.getUi().alert("❌ Une base est manquante (MP3 / TEXTES / VIDEOS)");
+    return;
+  }
+
+  // Nettoyage UNIQUEMENT des colonnes listes
+  baseMP3.getRange("A2:A").clearContent();
+  baseTXT.getRange("A2:A").clearContent();
+  baseVID.getRange("A2:A").clearContent();
+
+  // ======================
+  // LECTURE DRIVE
+  // ======================
+  chargerFichiersDansBase("Musique Spectacles Magma Show Paris", baseMP3);
+  chargerFichiersDansBase("Textes Spectacles Magma Show Paris", baseTXT);
+  chargerFichiersDansBase("VIDEOS MAGMA SHOW PARIS", baseVID);
+
+  SpreadsheetApp.getUi().alert("✅ Bases MP3 / Textes / Vidéos rafraîchies");
+}function chargerFichiersDansBase(nomDossier, sheet) {
+
+  const root = DriveApp.getRootFolder();
+  const folders = root.getFoldersByName(nomDossier);
+
+  if (!folders.hasNext()) return;
+
+  const folder = folders.next();
+  const files = folder.getFiles();
+
+  let row = 2;
+
+  while (files.hasNext()) {
+    const f = files.next();
+    sheet.getRange(row, 1).setValue(f.getName());
+    row++;
+  }
+}
+function NETTOYER_BASE_COSTUMES() {
+
+const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("BASE_COSTUMES");
+
+const range = sh.getDataRange();
+const values = range.getValues();
+
+for (let r = 0; r < values.length; r++) {
+  for (let c = 0; c < values[r].length; c++) {
+
+    if (values[r][c]) {
+
+      let v = values[r][c].toString();
+
+      // remplacer séparateurs
+      v = v.replace(/[,\.:\/\-&]/g," + ");
+
+      // nettoyer espaces multiples
+      v = v.replace(/\s*\+\s*/g," + ").trim();
+
+      values[r][c] = v;
+
+    }
+
+  }
+}
+
+range.setValues(values);
+
+}
+function getPrestations() {
+
+  const root = DriveApp.getRootFolder();
+  const exportsIt = root.getFoldersByName("EXPORTS");
+
+  if (!exportsIt.hasNext()) return [];
+
+  const exportsFolder = exportsIt.next();
+  const folders = exportsFolder.getFolders();
+
+  const result = [];
+
+  while (folders.hasNext()) {
+    const f = folders.next();
+
+    result.push({
+      id: f.getId(),
+      name: f.getName()
+    });
+  }
+
+  result.sort((a, b) => a.name.localeCompare(b.name));
+
+  return result;
+}
+function ouvrirImportFichiers() {
+
+  const exports =
+    DriveApp.getFoldersByName("EXPORTS");
+
+  if (!exports.hasNext()) {
+    SpreadsheetApp.getUi().alert(
+      "Dossier EXPORTS introuvable"
+    );
+    return;
+  }
+
+  const exportFolder = exports.next();
+
+  const folders =
+    exportFolder.getFolders();
+
+  let options = "";
+
+  while (folders.hasNext()) {
+
+    const f = folders.next();
+
+    options +=
+      `<option>${f.getName()}</option>`;
+  }
+
+  const template =
+    HtmlService.createTemplateFromFile(
+      "ImportFichiers"
+    );
+
+  template.options = options;
+
+  const html =
+    template.evaluate()
+      .setWidth(700)
+      .setHeight(500);
+
+  SpreadsheetApp.getUi()
+    .showModalDialog(
+      html,
+      "Import de fichiers"
+    );
+}
+function recevoirImport(spectacle, fichiers) {
+
+  Logger.log("SPECTACLE = " + spectacle);
+
+  fichiers.forEach(f => {
+    Logger.log("FICHIER = " + f.nom);
+  });
+
+  return {
+    ok: true,
+    spectacle: spectacle,
+    nb: fichiers.length
+  };
+}
+function importerFichiersDrive(
+  spectacle,
+  fichiers
+) {
+
+  const exports =
+    DriveApp.getFoldersByName("EXPORTS");
+
+  if (!exports.hasNext()) {
+
+    return {
+      message:
+        "Dossier EXPORTS introuvable"
+    };
+  }
+
+  const exportFolder =
+    exports.next();
+
+  const dossiers =
+    exportFolder.getFoldersByName(
+      spectacle
+    );
+
+  if (!dossiers.hasNext()) {
+
+    return {
+      message:
+        "Spectacle introuvable : " +
+        spectacle
+    };
+  }
+
+  const dossier =
+    dossiers.next();
+
+  let nb = 0;
+
+  fichiers.forEach(f => {
+
+    const base64 =
+      f.contenu.split(",")[1];
+
+    const bytes =
+      Utilities.base64Decode(base64);
+
+    const blob =
+      Utilities.newBlob(
+        bytes,
+        f.type,
+        f.nom
+      );
+
+    const nom =
+      f.nom.toLowerCase();
+const existants =
+  dossier.getFilesByName(
+    f.nom
+  );
+
+while (existants.hasNext()) {
+
+  existants.next().setTrashed(true);
+
+}
+    dossier.createFile(blob);
+
+    nb++;
+
+  });
+
+  return {
+    message:
+      nb +
+      " fichier(s) importé(s)"
+  };
+}
+function creerNouveauSpectacle(nom) {
+
+  const exports =
+    DriveApp.getFoldersByName("EXPORTS");
+
+  if (!exports.hasNext()) {
+
+    return {
+      ok: false,
+      message: "Dossier EXPORTS introuvable"
+    };
+  }
+
+  const exportFolder =
+    exports.next();
+
+  const deja =
+    exportFolder.getFoldersByName(nom);
+
+  if (deja.hasNext()) {
+
+    return {
+      ok: false,
+      message:
+        "Le spectacle existe déjà"
+    };
+  }
+
+  exportFolder.createFolder(nom);
+
+  return {
+    ok: true,
+    message:
+      "Spectacle créé : " + nom
+  };
+}
+function dupliquerSpectacle(
+  source,
+  destination
+) {
+
+  const exports =
+    DriveApp.getFoldersByName("EXPORTS");
+
+  if (!exports.hasNext()) {
+
+    return {
+      ok: false,
+      message:
+        "Dossier EXPORTS introuvable"
+    };
+  }
+
+  const exportFolder =
+    exports.next();
+
+  const sourceFolders =
+    exportFolder.getFoldersByName(
+      source
+    );
+
+  if (!sourceFolders.hasNext()) {
+
+    return {
+      ok: false,
+      message:
+        "Spectacle source introuvable"
+    };
+  }
+
+  const sourceFolder =
+    sourceFolders.next();
+
+  const deja =
+    exportFolder.getFoldersByName(
+      destination
+    );
+
+  if (deja.hasNext()) {
+
+    return {
+      ok: false,
+      message:
+        "Le spectacle existe déjà"
+    };
+  }
+
+  const nouveauFolder =
+    exportFolder.createFolder(
+      destination
+    );
+
+  copierDossierRecursif(
+    sourceFolder,
+    nouveauFolder
+  );
+
+  return {
+    ok: true,
+    message:
+      "Spectacle dupliqué : " +
+      destination
+  };
+}function copierDossierRecursif(
+  sourceFolder,
+  destinationFolder
+) {
+
+  const fichiers =
+    sourceFolder.getFiles();
+
+  while (fichiers.hasNext()) {
+
+    const fichier =
+      fichiers.next();
+
+    fichier.makeCopy(
+      fichier.getName(),
+      destinationFolder
+    );
+  }
+
+  const sousDossiers =
+    sourceFolder.getFolders();
+
+  while (sousDossiers.hasNext()) {
+
+    const sousDossier =
+      sousDossiers.next();
+
+    const nouveauSousDossier =
+      destinationFolder.createFolder(
+        sousDossier.getName()
+      );
+
+    copierDossierRecursif(
+      sousDossier,
+      nouveauSousDossier
+    );
+  }
+}
+function sendToWeb() {
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("CONDUITE");
+
+  const values = sheet.getDataRange().getValues();
+
+  const payload = {
+    updatedAt: new Date().toISOString(),
+    data: values
+  };
+
+  const url = "https://TON-WEB-MAGMA.com/api/sync";
+
+  UrlFetchApp.fetch(url, {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify(payload)
+  });
+}
