@@ -28,12 +28,9 @@ export default function App() {
   async function openShow(name) {
     setSelectedShow(name);
     setActiveFile(null);
-    setFiles([]);
 
     try {
-      const res = await fetch(
-        `${API}?action=getFiles&show=${encodeURIComponent(name)}`
-      );
+      const res = await fetch(`${API}?action=getFiles&show=${name}`);
       const json = await res.json();
       setFiles(Array.isArray(json) ? json : []);
     } catch (e) {
@@ -43,15 +40,10 @@ export default function App() {
   }
 
   function getId(url) {
-    return url?.match(/[-\w]{25,}/)?.[0] || "";
+    return url?.match(/[-\w]{25,}/)?.[0];
   }
 
-  function getPreviewUrl(file) {
-    const id = getId(file?.url);
-    if (!id) return "";
-    return `https://drive.google.com/file/d/${id}/preview`;
-  }
-
+  // 🔥 SIMPLE DOWNLOAD (OUVRE GOOGLE DRIVE)
   function openDownload(file) {
     if (!file?.url) return;
     window.open(file.url, "_blank");
@@ -59,6 +51,8 @@ export default function App() {
 
   return (
     <div style={styles.app}>
+
+      {/* LEFT */}
       <div style={styles.left}>
         <h3 style={styles.title}>🎭 MAGMA SHOW</h3>
 
@@ -69,14 +63,14 @@ export default function App() {
         <div>
           {shows.map((s, i) => {
             const name = s.name || s;
-
             return (
               <div
                 key={i}
                 onClick={() => openShow(name)}
                 style={{
                   ...styles.item,
-                  background: selectedShow === name ? "#333" : "#1a1a1a"
+                  background:
+                    selectedShow === name ? "#333" : "#1a1a1a"
                 }}
               >
                 🎬 {name}
@@ -86,43 +80,50 @@ export default function App() {
         </div>
       </div>
 
+      {/* RIGHT */}
       <div style={styles.right}>
         {!selectedShow && (
-          <div style={styles.empty}>Choisis un spectacle</div>
+          <div style={styles.empty}>
+            Choisis un spectacle
+          </div>
         )}
 
         {selectedShow && (
           <>
             <h2>{selectedShow}</h2>
 
-            {files.length === 0 && (
-              <div style={styles.empty}>Aucun fichier trouvé</div>
-            )}
+            <div>
+              {files.map((f, i) => (
+                <div key={i} style={styles.fileRow}>
 
-            {files.map((f, i) => (
-              <div key={i} style={styles.fileRow}>
-                <span
-                  onClick={() => setActiveFile(f)}
-                  style={styles.fileName}
-                >
-                  📄 {f.name}
-                </span>
+                  {/* OPEN PLAYER */}
+                  <span
+                    onClick={() => setActiveFile(f)}
+                    style={styles.fileName}
+                  >
+                    📄 {f.name}
+                  </span>
 
-                <button
-                  style={styles.downloadBtn}
-                  onClick={() => openDownload(f)}
-                >
-                  Télécharger
-                </button>
-              </div>
-            ))}
+                  {/* DOWNLOAD SAFE */}
+                  <button
+                    style={styles.downloadBtn}
+                    onClick={() => openDownload(f)}
+                  >
+                    Télécharger
+                  </button>
+
+                </div>
+              ))}
+            </div>
           </>
         )}
       </div>
 
+      {/* PLAYER STABLE (1 SEUL SYSTEM DRIVE) */}
       {activeFile && (
         <div style={styles.modal}>
           <div style={styles.modalBox}>
+
             <button
               style={styles.close}
               onClick={() => setActiveFile(null)}
@@ -133,11 +134,12 @@ export default function App() {
             <h3>{activeFile.name}</h3>
 
             <iframe
-              title={activeFile.name}
               style={styles.viewer}
-              src={getPreviewUrl(activeFile)}
-              allow="autoplay"
+              src={`https://drive.google.com/file/d/${getId(
+                activeFile.url
+              )}/preview`}
             />
+
           </div>
         </div>
       )}
@@ -145,6 +147,7 @@ export default function App() {
   );
 }
 
+/* ---------------- STYLE ---------------- */
 const styles = {
   app: {
     display: "flex",
