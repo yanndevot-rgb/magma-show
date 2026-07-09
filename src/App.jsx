@@ -30,9 +30,7 @@ export default function App() {
     setActiveFile(null);
 
     try {
-      const res = await fetch(
-        `${API}?action=getFiles&show=${encodeURIComponent(name)}`
-      );
+      const res = await fetch(`${API}?action=getFiles&show=${name}`);
       const json = await res.json();
       setFiles(Array.isArray(json) ? json : []);
     } catch (e) {
@@ -45,6 +43,7 @@ export default function App() {
     return url?.match(/[-\w]{25,}/)?.[0];
   }
 
+  // 🔥 SIMPLE DOWNLOAD (OUVRE GOOGLE DRIVE)
   function openDownload(file) {
     if (!file?.url) return;
     window.open(file.url, "_blank");
@@ -52,6 +51,8 @@ export default function App() {
 
   return (
     <div style={styles.app}>
+
+      {/* LEFT */}
       <div style={styles.left}>
         <h3 style={styles.title}>🎭 MAGMA SHOW</h3>
 
@@ -68,7 +69,8 @@ export default function App() {
                 onClick={() => openShow(name)}
                 style={{
                   ...styles.item,
-                  background: selectedShow === name ? "#333" : "#1a1a1a"
+                  background:
+                    selectedShow === name ? "#333" : "#1a1a1a"
                 }}
               >
                 🎬 {name}
@@ -78,9 +80,12 @@ export default function App() {
         </div>
       </div>
 
+      {/* RIGHT */}
       <div style={styles.right}>
         {!selectedShow && (
-          <div style={styles.empty}>Choisis un spectacle</div>
+          <div style={styles.empty}>
+            Choisis un spectacle
+          </div>
         )}
 
         {selectedShow && (
@@ -90,6 +95,8 @@ export default function App() {
             <div>
               {files.map((f, i) => (
                 <div key={i} style={styles.fileRow}>
+
+                  {/* OPEN PLAYER */}
                   <span
                     onClick={() => setActiveFile(f)}
                     style={styles.fileName}
@@ -97,12 +104,14 @@ export default function App() {
                     📄 {f.name}
                   </span>
 
+                  {/* DOWNLOAD SAFE */}
                   <button
                     style={styles.downloadBtn}
                     onClick={() => openDownload(f)}
                   >
                     Télécharger
                   </button>
+
                 </div>
               ))}
             </div>
@@ -110,9 +119,11 @@ export default function App() {
         )}
       </div>
 
+      {/* PLAYER STABLE (1 SEUL SYSTEM DRIVE) */}
       {activeFile && (
         <div style={styles.modal}>
           <div style={styles.modalBox}>
+
             <button
               style={styles.close}
               onClick={() => setActiveFile(null)}
@@ -123,13 +134,12 @@ export default function App() {
             <h3>{activeFile.name}</h3>
 
             <iframe
-              title={activeFile.name}
               style={styles.viewer}
               src={`https://drive.google.com/file/d/${getId(
                 activeFile.url
               )}/preview`}
-              allow="autoplay"
             />
+
           </div>
         </div>
       )}
@@ -137,6 +147,7 @@ export default function App() {
   );
 }
 
+/* ---------------- STYLE ---------------- */
 const styles = {
   app: {
     display: "flex",
