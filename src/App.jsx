@@ -28,7 +28,6 @@ export default function App() {
   async function openShow(name) {
     setSelectedShow(name);
     setActiveFile(null);
-    setFiles([]);
 
     try {
       const res = await fetch(
@@ -43,23 +42,7 @@ export default function App() {
   }
 
   function getId(url) {
-    return url?.match(/[-\w]{25,}/)?.[0] || "";
-  }
-
-  function isVideo(file) {
-    const name = (file?.name || "").toLowerCase();
-    return name.endsWith(".mp4") || name.endsWith(".mov") || name.endsWith(".avi");
-  }
-
-  function openFile(file) {
-    if (!file?.url) return;
-
-    if (isVideo(file)) {
-      window.open(file.url, "_blank");
-      return;
-    }
-
-    setActiveFile(file);
+    return url?.match(/[-\w]{25,}/)?.[0];
   }
 
   function openDownload(file) {
@@ -79,7 +62,6 @@ export default function App() {
         <div>
           {shows.map((s, i) => {
             const name = s.name || s;
-
             return (
               <div
                 key={i}
@@ -108,8 +90,11 @@ export default function App() {
             <div>
               {files.map((f, i) => (
                 <div key={i} style={styles.fileRow}>
-                  <span onClick={() => openFile(f)} style={styles.fileName}>
-                    {isVideo(f) ? "🎬" : "📄"} {f.name}
+                  <span
+                    onClick={() => setActiveFile(f)}
+                    style={styles.fileName}
+                  >
+                    📄 {f.name}
                   </span>
 
                   <button
